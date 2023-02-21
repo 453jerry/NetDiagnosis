@@ -1,2 +1,3 @@
 # NetDiagnosis
-Ping &amp; DNS lookup， support IPv4 &amp; IPv6
+
+The goal of this project is to provide swift developers with a bunch of network diagnostic tools that support both IPv4 and IPv6. Currently I plan to implement Ping, Traceroute, domain name resolve.  
