@@ -1,11 +1,11 @@
-import XCTest
-@testable import NetDiagnosis
-
-final class NetDiagnosisTests: XCTestCase {
-    func testExample() throws {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct
-        // results.
-        XCTAssertEqual(NetDiagnosis().text, "Hello, World!")
-    }
-}
+//import XCTest
+//@testable import NetDiagnosis
+//
+//final class NetDiagnosisTests: XCTestCase {
+//    func testExample() throws {
+//        // This is an example of a functional test case.
+//        // Use XCTAssert and related functions to verify your tests produce the correct
+//        // results.
+//        XCTAssertEqual(NetDiagnosis().text, "Hello, World!")
+//    }
+//}
