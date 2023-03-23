@@ -10,16 +10,7 @@ import Foundation
 public enum IPAddr {
     case ipv4(_: in_addr)
     case ipv6(_: in6_addr)
-    
-    public func toString() -> String? {
-        switch self {
-        case .ipv4(let addr):
-            return addr.toString()
-        case .ipv6(let addr):
-            return addr.toString()
-        }
-    }
-    
+
     public func createSockStorage(port: in_port_t = 0) -> sockaddr_storage {
         var addrStorage = sockaddr_storage()
         switch self {
@@ -99,6 +90,17 @@ extension IPAddr: Equatable {
             default:
                 return false
             }
+        }
+    }
+}
+
+extension IPAddr: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .ipv4(let addr):
+            return addr.description
+        case .ipv6(let addr):
+            return addr.description
         }
     }
 }
@@ -192,8 +194,8 @@ extension sockaddr_storage {
     }
 }
 
-extension in_addr {
-    public func toString() -> String? {
+extension in_addr: CustomStringConvertible {
+    public var description: String {
         var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
         return withUnsafePointer(to: self) { ptr in
             guard inet_ntop(
@@ -202,16 +204,15 @@ extension in_addr {
                 &buffer,
                 socklen_t(INET_ADDRSTRLEN)
             ) != nil else {
-                return nil
+                return "Invalid Addr"
             }
             return String.init(cString: buffer)
         }
-        
     }
 }
 
-extension in6_addr {
-    public func toString() -> String? {
+extension in6_addr: CustomStringConvertible {
+    public var description: String {
         var buffer = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
         return withUnsafePointer(to: self) { ptr in
             guard inet_ntop(
@@ -220,7 +221,7 @@ extension in6_addr {
                 &buffer,
                 socklen_t(INET6_ADDRSTRLEN)
             ) != nil else {
-                return nil
+                return "Invalid Addr"
             }
             return String.init(cString: buffer)
         }
