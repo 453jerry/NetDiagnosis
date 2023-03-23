@@ -9,29 +9,6 @@ import Foundation
 
 // swiftlint: disable file_length
 public class Pinger {
-    // swiftlint: disable enum_case_associated_values_count
-    public enum Result {
-        case pong(
-            payload: Data,
-            from: IPAddr,
-            hopLimit: UInt8,
-            sequence: UInt16,
-            identifier: UInt16,
-            time: TimeInterval
-        )
-        case hopLimitExceeded(
-            payload: Data,
-            from: IPAddr,
-            hopLimit: UInt8,
-            sequence: UInt16,
-            identifier: UInt16,
-            time: TimeInterval
-        )
-        case timeout(sequence: UInt16, identifier: UInt16)
-        case failed(_: Error)
-    }
-    
-    public typealias Callback = (_ result: Result) -> Void
     
     var icmpHeader: ICMP.Header = ICMP.Header.init(
         type: 0,
@@ -40,7 +17,11 @@ public class Pinger {
         sequenceNumber: 0
     )
     
-    var remoteAddr: IPAddr
+    public var icmpIdentifier: UInt16 {
+        icmpHeader.identifier
+    }
+    
+    public let remoteAddr: IPAddr
     let socket: Int32
     let serailQueue = DispatchQueue(label: "Pinger Queue", qos: .userInteractive)
         
@@ -80,137 +61,135 @@ public class Pinger {
         }
     }
     
-    // swiftlint: disable function_body_length
     public func ping(
         payload: Data? = nil,
-        hopLimit: UInt32? = nil,
+        hopLimit: UInt8? = nil,
         timeOut: TimeInterval = 1.0,
-        callback: @escaping Callback
+        callback: @escaping PingCallback
     ) {
-        // swiftlint: disable closure_body_length
-        self.serailQueue.async { [self] in
-            // setup
-            let currentIdentififer = self.icmpHeader.identifier
-            let currentSeq = self.icmpHeader.sequenceNumber
-            
-            do {
-                try self.setTimeout(timeOut)
-                var begin = Date.init()
-                var timeLeft = timeOut
-                
-                // send
-                try send(payload: payload, hopLimit: hopLimit)
-                self.icmpHeader.sequenceNumber += 1
-                
-                // Receive
-                repeat {
-                    if timeLeft <= 0 {
-                        callback(.timeout(
-                            sequence: currentSeq,
-                            identifier: currentIdentififer
-                        ))
-                        break
-                    } else if timeLeft < timeOut {
-                        try self.setTimeout(timeLeft)
-                        begin = Date.init()
-                    }
-                    
-                    var cmsgBuffer = [UInt8](
-                        repeating: 0,
-                        count: (MemoryLayout<cmsghdr>.size) + MemoryLayout<UInt32>.size
-                    )
-                    var recvBuffer = [UInt8](repeating: 0, count: 1024)
-                    var srcAddr = sockaddr_storage()
-                    var cmsgLen = socklen_t(cmsgBuffer.count)
-                    
-                    let receivedCount = try receive(
-                        recvBuffer: &recvBuffer,
-                        cmsgBuffer: &cmsgBuffer,
-                        cmsgLen: &cmsgLen,
-                        srcAddr: &srcAddr
-                    )
-                    
-                    timeLeft -= Date().timeIntervalSince(begin)
-                    
-                    // parse
-                    let icmpPacket = recvBuffer.withUnsafeBufferPointer { ptr in
-                        parse(
-                            receiveBufferPtr: UnsafeRawBufferPointer.init(
-                                start: ptr.baseAddress,
-                                count: receivedCount
-                            )
-                        )
-                    }
-
-                    // Get HopLimit/TTL
-                    let hopLimit = cmsgBuffer.withUnsafeBytes { ptr in
-                        getHopLimit(
-                            cmsgBufferPtr: UnsafeRawBufferPointer.init(
-                                start: ptr.baseAddress,
-                                count: Int(cmsgLen)
-                            )
-                        )
-                    }
-
-                    guard let icmpPacket = icmpPacket,
-                        let hopLimit = hopLimit,
-                        let srcAddr = srcAddr.toIPAddr() else {
-                        continue
-                    }
-
-                    guard verifyICMPPacket(
-                        icmpPacket,
-                        expectedSequence: currentSeq,
-                        expectedIdentifier: currentIdentififer
-                    ) == true else {
-                        continue
-                    }
-                    
-                    if icmpPacket.header.type == icmpHopLimitExceeded {
-                        callback(
-                            .hopLimitExceeded(
-                                payload: icmpPacket.payload,
-                                from: srcAddr,
-                                hopLimit: hopLimit,
-                                sequence: currentSeq,
-                                identifier: currentIdentififer,
-                                time: timeOut - timeLeft
-                            )
-                        )
-                        break
-                    } else if icmpPacket.header.type == icmpEqualReplayType && 
-                    srcAddr == self.remoteAddr {
-                        callback(
-                            .pong(
-                                payload: icmpPacket.payload,
-                                from: srcAddr,
-                                hopLimit: hopLimit,
-                                sequence: icmpPacket.header.sequenceNumber,
-                                identifier: icmpPacket.header.identifier,
-                                time: timeOut - timeLeft
-                            )
-                        )
-                        break
-                    }
-                }
-                while(true)
-            } catch let error {
-                // receive time out
-                if (error as? POSIXError)?.code == POSIXError.EAGAIN {
-                    callback(.timeout(
-                        sequence: currentSeq,
-                        identifier: currentIdentififer
-                    ))
-                    return
-                }
-                callback(.failed(error))
-            }
+        self.serailQueue.async {
+            let result = self.ping(payload: payload, hopLimit: hopLimit, timeOut: timeOut)
+            callback(result)
         }
     }
     
-    func send(payload: Data?, hopLimit: UInt32?) throws {
+    // swiftlint: disable function_body_length
+    func ping(
+        payload: Data?,
+        hopLimit: UInt8?,
+        timeOut: TimeInterval
+    ) -> Response {
+        // setup
+        let currentIdentififer = self.icmpHeader.identifier
+        let currentSeq = self.icmpHeader.sequenceNumber
+        
+        do {
+            try self.setTimeout(timeOut)
+            var begin = Date.init()
+            var timeLeft = timeOut
+            
+            // send
+            try send(payload: payload, hopLimit: hopLimit)
+            self.icmpHeader.sequenceNumber += 1
+            
+            // Receive
+            repeat {
+                if timeLeft <= 0 {
+                    return .timeout(
+                        sequence: currentSeq,
+                        identifier: currentIdentififer
+                    )
+                } else if timeLeft < timeOut {
+                    try self.setTimeout(timeLeft)
+                    begin = Date.init()
+                }
+                
+                var cmsgBuffer = [UInt8](
+                    repeating: 0,
+                    count: (MemoryLayout<cmsghdr>.size) + MemoryLayout<UInt32>.size
+                )
+                var recvBuffer = [UInt8](repeating: 0, count: 1024)
+                var srcAddr = sockaddr_storage()
+                var cmsgLen = socklen_t(cmsgBuffer.count)
+                
+                let receivedCount = try receive(
+                    recvBuffer: &recvBuffer,
+                    cmsgBuffer: &cmsgBuffer,
+                    cmsgLen: &cmsgLen,
+                    srcAddr: &srcAddr
+                )
+                
+                timeLeft -= Date().timeIntervalSince(begin)
+                
+                // parse
+                let icmpPacket = recvBuffer.withUnsafeBufferPointer { ptr in
+                    parse(
+                        receiveBufferPtr: UnsafeRawBufferPointer.init(
+                            start: ptr.baseAddress,
+                            count: receivedCount
+                        )
+                    )
+                }
+
+                // Get HopLimit/TTL
+                let hopLimit = cmsgBuffer.withUnsafeBytes { ptr in
+                    getHopLimit(
+                        cmsgBufferPtr: UnsafeRawBufferPointer.init(
+                            start: ptr.baseAddress,
+                            count: Int(cmsgLen)
+                        )
+                    )
+                }
+
+                guard let icmpPacket = icmpPacket,
+                    let hopLimit = hopLimit,
+                    let srcAddr = srcAddr.toIPAddr() else {
+                    continue
+                }
+
+                guard verifyICMPPacket(
+                    icmpPacket,
+                    expectedSequence: currentSeq,
+                    expectedIdentifier: currentIdentififer
+                ) == true else {
+                    continue
+                }
+                
+                if icmpPacket.header.type == icmpHopLimitExceeded {
+                    return .hopLimitExceeded(
+                        from: srcAddr,
+                        hopLimit: hopLimit,
+                        sequence: currentSeq,
+                        identifier: currentIdentififer,
+                        time: timeOut - timeLeft
+                    )
+                } else if icmpPacket.header.type == icmpEqualReplayType &&
+                srcAddr == self.remoteAddr {
+                    return .pong(
+                        from: srcAddr,
+                        hopLimit: hopLimit,
+                        sequence: currentSeq,
+                        identifier: currentIdentififer,
+                        time: timeOut - timeLeft
+                    )
+                }
+            }
+            while(true)
+        } catch let error {
+            // receive time out
+            if (error as? POSIXError)?.code == POSIXError.EAGAIN {
+                return.timeout(
+                    sequence: currentSeq,
+                    identifier: currentIdentififer
+                )
+            }
+            return .failed(error)
+        }
+    }
+    
+    func send(payload: Data?, hopLimit: UInt8?) throws {
         if let hopLimit = hopLimit {
-            try self.setHopLimit(hopLimit)
+            try self.setHopLimit(UInt32(hopLimit))
         }
         let packetData = ICMP.createPacketData(
             with: self.icmpHeader,
@@ -270,11 +249,6 @@ public class Pinger {
         }
         return receivedCount
     }
-    
-    deinit {
-        shutdown(self.socket, SHUT_RDWR)
-        close(self.socket)
-    }
 
     public static func createRandomPayload(len: Int) -> Data {
         var data = Data.init(count: len)
@@ -284,9 +258,39 @@ public class Pinger {
         }
         return data
     }
+    
+    deinit {
+        shutdown(self.socket, SHUT_RDWR)
+        close(self.socket)
+    }
 }
 
-// Properties
+// MARK: - Response & Callback type
+extension Pinger {
+    // swiftlint: disable enum_case_associated_values_count
+    public enum Response {
+        case pong(
+            from: IPAddr,
+            hopLimit: UInt8,
+            sequence: UInt16,
+            identifier: UInt16,
+            time: TimeInterval
+        )
+        case hopLimitExceeded(
+            from: IPAddr,
+            hopLimit: UInt8,
+            sequence: UInt16,
+            identifier: UInt16,
+            time: TimeInterval
+        )
+        case timeout(sequence: UInt16, identifier: UInt16)
+        case failed(_: Error)
+    }
+    
+    public typealias PingCallback = (_ result: Response) -> Void
+}
+
+// MARK: - Properties
 extension Pinger {
     var ipProtocol: Int32 {
         switch remoteAddr {
@@ -343,7 +347,7 @@ extension Pinger {
     }
 }
 
-// Set socket options
+// MARK: - Set socket options
 extension Pinger {
     func setTimeout(_ time: TimeInterval) throws {
         let timeVal = time.toTimeVal()
@@ -379,7 +383,7 @@ extension Pinger {
     }
 }
 
-// Parse received data & cmsg
+// MARK: - Parse received data & cmsg
 extension Pinger {
     func getICMPPacketPtr(ipPacketPtr: UnsafeRawBufferPointer) -> UnsafeRawBufferPointer? {
         guard let ipVer = {
@@ -487,6 +491,7 @@ extension Pinger {
     }
 }
 
+// MARK: - Timer interval
 extension TimeInterval {
     func toTimeVal() -> timeval {
         let sec = floor(self)
