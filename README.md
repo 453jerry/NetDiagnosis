@@ -38,7 +38,7 @@ pinger.ping { result in
     print(result)
 }
 // Output:
-//pong(from: 13.107.21.200, hopLimit: 113, sequence: 0, identifier: 58577, time: 0.08944892883300781)
+// pong(from: 13.107.21.200, hopLimit: 113, sequence: 0, identifier: 58577, time: 0.08944892883300781)
 
 pinger.ping(hopLimit: 3) { result in
     print(result)
@@ -51,4 +51,68 @@ pinger.ping(hopLimit: 3, timeOut: 0.001) { result in
 }
 // Output:
 // timeout(sequence: 2, identifier: 58577)
+```
+
+## Trace route
+
+```swift
+let remoteAddr = IPAddr.create("13.107.21.200", addressFamily: .ipv4)
+// Also support IPv6 address
+// let remoteAddr = IPAddr.create("2620:1ec:c11::200", addressFamily: .ipv6) 
+let pinger = try! Pinger.init(remoteAddr: remoteAddr) 
+
+pinger.trace { result, status in
+    for (hop,responses) in result {
+        print("hop:\(hop)")
+        for response in responses {
+            print(response)
+        }
+    }
+    print("Complete Status:\(status)")
+}
+// Output:
+//    hop:1
+//    hopLimitExceeded(from: 172.20.10.1, hopLimit: 64, sequence: 3, identifier: 63182, time: 0.0032230615615844727)
+//    hopLimitExceeded(from: 172.20.10.1, hopLimit: 64, sequence: 4, identifier: 63182, time: 0.0031599998474121094)
+//    hopLimitExceeded(from: 172.20.10.1, hopLimit: 64, sequence: 5, identifier: 63182, time: 0.002807021141052246)
+//    hop:2
+//    timeout(sequence: 6, identifier: 63182)
+//    timeout(sequence: 7, identifier: 63182)
+//    timeout(sequence: 8, identifier: 63182)
+//
+//    ......
+//
+//    hop:13
+//    hopLimitExceeded(from: 104.44.236.180, hopLimit: 243, sequence: 39, identifier: 63182, time: 0.04397702217102051)
+//    hopLimitExceeded(from: 104.44.236.180, hopLimit: 243, sequence: 40, identifier: 63182, time: 0.059321045875549316)
+//    hopLimitExceeded(from: 104.44.236.180, hopLimit: 243, sequence: 41, identifier: 63182, time: 0.04588794708251953)
+//    hop:14
+//    timeout(sequence: 42, identifier: 63182)
+//    timeout(sequence: 43, identifier: 63182)
+//    timeout(sequence: 44, identifier: 63182)
+//    hop:15
+//    timeout(sequence: 45, identifier: 63182)
+//    timeout(sequence: 46, identifier: 63182)
+//    timeout(sequence: 47, identifier: 63182)
+//    hop:16
+//    pong(from: 13.107.21.200, hopLimit: 113, sequence: 48, identifier: 63182, time: 0.0753859281539917)
+//    pong(from: 13.107.21.200, hopLimit: 113, sequence: 49, identifier: 63182, time: 0.06895899772644043)
+//    pong(from: 13.107.21.200, hopLimit: 113, sequence: 50, identifier: 63182, time: 0.06241798400878906)
+//
+//    Complete Status:traced
+
+pinger.trace(initHop: 10, maxHop: 14, packetCount: 1) { response, hop, packetIndex, stopTrace in
+    print("Hop:\(hop) packetIdx:\(packetIndex), response:\(response)")
+    // If you want stop trace
+    // stopTrace(true)
+} onTraceComplete: { _, status in
+    print("Complete Status:\(status)")
+}
+// Output:
+// Hop:10 packetIdx:0, response:hopLimitExceeded(from: 202.97.19.94, hopLimit: 246, sequence: 3, identifier: 62186, time: 0.04130589962005615)
+// Hop:11 packetIdx:0, response:hopLimitExceeded(from: 203.215.236.98, hopLimit: 244, sequence: 4, identifier: 62186, time: 0.04481005668640137)
+// Hop:12 packetIdx:0, response:hopLimitExceeded(from: 104.44.235.186, hopLimit: 244, sequence: 5, identifier: 62186, time: 0.04833698272705078)
+// Hop:13 packetIdx:0, response:hopLimitExceeded(from: 104.44.236.180, hopLimit: 243, sequence: 6, identifier: 62186, time: 0.041616082191467285)
+// Hop:14 packetIdx:0, response:timeout(sequence: 7, identifier: 62186)
+// Complete Status:maxHopExceeded
 ```
