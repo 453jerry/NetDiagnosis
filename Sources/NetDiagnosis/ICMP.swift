@@ -27,7 +27,7 @@ public enum ICMP {
             (payload?.count ?? 0)
         )
         
-        _ = packetData.withUnsafeMutableBytes { rawPtr in
+        packetData.withUnsafeMutableBytes { rawPtr in
             // swiftlint: disable force_unwrapping
             var uint8Ptr = rawPtr.bindMemory(to: UInt8.self).baseAddress!
             uint8Ptr.pointee = header.type
@@ -43,7 +43,6 @@ public enum ICMP {
             uint16Ptr.pointee = header.identifier.bigEndian
             uint16Ptr = uint16Ptr.advanced(by: 1)
             uint16Ptr.pointee = header.sequenceNumber.bigEndian
-            return 0
         }
 
         if let payload = payload {

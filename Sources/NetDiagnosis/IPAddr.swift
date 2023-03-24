@@ -171,7 +171,11 @@ extension sockaddr_storage {
                     to: sockaddr_in.self, 
                     capacity: 1
                 ) { addrPtr in
+                    #if swift(>=5.7)
                     addrPtr.pointer(to: \sockaddr_in.sin_addr)?.pointee
+                    #else
+                    addrPtr.pointee.sin_addr
+                    #endif
                 }
             }) else {
                 return nil
@@ -183,7 +187,11 @@ extension sockaddr_storage {
                     to: sockaddr_in6.self, 
                     capacity: 1
                 ) { addrPtr in
+                    #if swift(>=5.7)
                     addrPtr.pointer(to: \sockaddr_in6.sin6_addr)?.pointee
+                    #else
+                    addrPtr.pointee.sin6_addr
+                    #endif           
                 }
             }) else {
                 return nil
