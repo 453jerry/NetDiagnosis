@@ -111,3 +111,14 @@ public enum ICMP {
         return UInt16(truncatingIfNeeded: ~sum)
     }
 }
+
+#if swift(<5.5)
+
+let ICMP_ECHO: Int32 = 8
+let ICMP6_ECHO_REQUEST: Int32 = 128
+let ICMP_ECHOREPLY: Int32 = 0
+let ICMP6_ECHO_REPLY: Int32 = 129
+let ICMP_TIMXCEED: Int32 = 11
+let ICMP6_TIME_EXCEEDED: Int32 = 3
+
+#endif
