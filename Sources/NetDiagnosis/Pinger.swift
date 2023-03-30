@@ -196,7 +196,7 @@ public class Pinger {
             payload: payload ?? Self.createRandomPayload(len: 100)
         )
         
-        let sentCount = packetData.withUnsafeBytes { packetPtr in
+        let sentCount = packetData.withUnsafeBytes { packetPtr -> ssize_t in
             let addrStorage = self.remoteAddr.createSockStorage()
             return withUnsafePointer(to: addrStorage) { addrPtr in
                 addrPtr.withMemoryRebound(
@@ -386,7 +386,7 @@ extension Pinger {
 // MARK: - Parse received data & cmsg
 extension Pinger {
     func getICMPPacketPtr(ipPacketPtr: UnsafeRawBufferPointer) -> UnsafeRawBufferPointer? {
-        guard let ipVer = {
+        guard let ipVer = { () -> IPAddr.AddressFamily? in
             let ver: UInt8 = (ipPacketPtr[0] & 0xF0) >> 4
             if ver == 0x04 {
                 return IPAddr.AddressFamily.ipv4
@@ -398,7 +398,7 @@ extension Pinger {
             return nil // Neither IPv4 nor IPv6
         }
         
-        let headerLen = {
+        let headerLen = { () -> Int in
             switch ipVer {
             case .ipv4:
                 return Int((ipPacketPtr[0] & 0x0F) * 4)
@@ -449,7 +449,7 @@ extension Pinger {
     func parse(
         receiveBufferPtr: UnsafeRawBufferPointer
     ) -> ICMPPacket? {
-        guard let icmpPacketPtr = {
+        guard let icmpPacketPtr = { () -> UnsafeRawBufferPointer? in
             switch self.remoteAddr.addressFamily {
             case .ipv4:
                 return getICMPPacketPtr(ipPacketPtr: receiveBufferPtr)

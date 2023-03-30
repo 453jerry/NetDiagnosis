@@ -27,7 +27,7 @@ public enum ICMP {
             (payload?.count ?? 0)
         )
         
-        _ = packetData.withUnsafeMutableBytes { rawPtr in
+        packetData.withUnsafeMutableBytes { rawPtr in
             // swiftlint: disable force_unwrapping
             var uint8Ptr = rawPtr.bindMemory(to: UInt8.self).baseAddress!
             uint8Ptr.pointee = header.type
@@ -43,7 +43,6 @@ public enum ICMP {
             uint16Ptr.pointee = header.identifier.bigEndian
             uint16Ptr = uint16Ptr.advanced(by: 1)
             uint16Ptr.pointee = header.sequenceNumber.bigEndian
-            return 0
         }
 
         if let payload = payload {
@@ -112,3 +111,14 @@ public enum ICMP {
         return UInt16(truncatingIfNeeded: ~sum)
     }
 }
+
+#if swift(<5.5)
+//swiftlint:disable identifier_name
+let ICMP_ECHO: Int32 = 8
+let ICMP6_ECHO_REQUEST: Int32 = 128
+let ICMP_ECHOREPLY: Int32 = 0
+let ICMP6_ECHO_REPLY: Int32 = 129
+let ICMP_TIMXCEED: Int32 = 11
+let ICMP6_TIME_EXCEEDED: Int32 = 3
+
+#endif
