@@ -1,6 +1,6 @@
 //
 //  Pinger.swift
-//  
+//
 //
 //  Created by Jerry on 2023/2/4.
 //
@@ -29,8 +29,22 @@ public class Pinger {
         remoteAddr: IPAddr
     ) throws {
         self.remoteAddr = remoteAddr
-        self.socket = Darwin.socket(
+        #if os(Linux)
+        self.socket = Glibc.socket(
             Int32(self.remoteAddr.addressFamily.raw),
+            Int32(SOCK_DGRAM.rawValue),
+            {
+                switch remoteAddr {
+                case .ipv4:
+                    return Int32(IPPROTO_ICMP)
+                case .ipv6:
+                    return Int32(IPPROTO_ICMPV6)
+                }
+            }()
+        )
+        #else
+        self.socket = Darwin.socket(
+            self.remoteAddr.addressFamily.raw,
             SOCK_DGRAM,
             {
                 switch remoteAddr {
@@ -41,6 +55,7 @@ public class Pinger {
                 }
             }()
         )
+        #endif
         guard self.socket > 0 else {
             // swiftlint:disable force_unwrapping
             throw POSIXError.init(POSIXErrorCode.init(rawValue: errno)!)
@@ -59,6 +74,27 @@ public class Pinger {
             // swiftlint:disable force_unwrapping
             throw POSIXError(POSIXErrorCode(rawValue: errno)!)
         }
+
+
+        #if os(Linux)
+        // https://stackoverflow.com/questions/25699779/should-i-write-id-to-icmphdr-id-field-when-using-icmp-sockets
+        // https://joekuan.wordpress.com/2017/05/30/behaviour-of-identifier-field-in-icmp-ping-as-udp-between-linux-and-osx/
+        var sa = sockaddr_in()
+        sa.sin_family = UInt16(PF_INET)
+        sa.sin_port = htons(self.icmpHeader.identifier)
+        sa.sin_addr.s_addr = htonl(INADDR_ANY)
+        let code = withUnsafePointer(to: sa) { addrPtr in
+            return addrPtr.withMemoryRebound(
+                to: sockaddr.self,
+                capacity: 1
+            ) { addrPtr in
+                return bind(self.socket, addrPtr, socklen_t(addrPtr.pointee.sa_len))
+            }
+        }
+        if code < 0 {
+            throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+        }
+        #endif
     }
     
     public func ping(
@@ -67,10 +103,10 @@ public class Pinger {
         timeOut: TimeInterval = 1.0,
         callback: @escaping PingCallback
     ) {
-        self.serailQueue.async {
+         self.serailQueue.async {
             let result = self.ping(payload: payload, hopLimit: hopLimit, timeOut: timeOut)
             callback(result)
-        }
+         }
     }
     
     // swiftlint: disable function_body_length
@@ -110,12 +146,10 @@ public class Pinger {
                 )
                 var recvBuffer = [UInt8](repeating: 0, count: 1024)
                 var srcAddr = sockaddr_storage()
-                var cmsgLen = socklen_t(cmsgBuffer.count)
                 
                 let receivedCount = try receive(
                     recvBuffer: &recvBuffer,
                     cmsgBuffer: &cmsgBuffer,
-                    cmsgLen: &cmsgLen,
                     srcAddr: &srcAddr
                 )
                 
@@ -136,7 +170,7 @@ public class Pinger {
                     getHopLimit(
                         cmsgBufferPtr: UnsafeRawBufferPointer.init(
                             start: ptr.baseAddress,
-                            count: Int(cmsgLen)
+                            count: cmsgBuffer.count
                         )
                     )
                 }
@@ -223,7 +257,6 @@ public class Pinger {
     func receive(
         recvBuffer: inout [UInt8],
         cmsgBuffer: inout [UInt8],
-        cmsgLen: inout socklen_t,
         srcAddr: inout sockaddr_storage
     ) throws -> Int {
         var iov = iovec(
@@ -231,6 +264,11 @@ public class Pinger {
             iov_len: recvBuffer.count
         )
 
+        #if os(Linux)
+        let cmsgLen = cmsgBuffer.count
+        #else
+        let cmsgLen = socklen_t(cmsgBuffer.count)
+        #endif
         var msghdr = msghdr(
             msg_name: withUnsafeMutablePointer(to: &srcAddr) { $0 },
             msg_namelen: socklen_t( MemoryLayout.size(ofValue: srcAddr)),
@@ -260,7 +298,7 @@ public class Pinger {
     }
     
     deinit {
-        shutdown(self.socket, SHUT_RDWR)
+        shutdown(self.socket, Int32(SHUT_RDWR))
         close(self.socket)
     }
 }
@@ -295,9 +333,9 @@ extension Pinger {
     var ipProtocol: Int32 {
         switch remoteAddr {
         case .ipv4:
-            return IPPROTO_IP
+            return Int32(IPPROTO_IP)
         case .ipv6:
-            return IPPROTO_IPV6
+            return Int32(IPPROTO_IPV6)
         }
     }
     
@@ -433,8 +471,13 @@ extension Pinger {
         let cmsghdrPtr = UnsafePointer<cmsghdr>.init(
             OpaquePointer.init(cmsgBufferPtr.baseAddress)
         )
+        #if os(Linux)
+        let cmsgType =  self.hopLimitOption
+        #else
+        let cmsgType: Int32 = self.receiveHopLimitOption
+        #endif
         if cmsghdrPtr?.pointee.cmsg_level == self.ipProtocol &&
-            cmsghdrPtr?.pointee.cmsg_type == self.receiveHopLimitOption {
+            cmsghdrPtr?.pointee.cmsg_type == cmsgType {
             return cmsgBufferPtr.load(
                 fromByteOffset: MemoryLayout<cmsghdr>.size,
                 as: UInt8.self
@@ -452,7 +495,11 @@ extension Pinger {
         guard let icmpPacketPtr = { () -> UnsafeRawBufferPointer? in
             switch self.remoteAddr.addressFamily {
             case .ipv4:
+                #if os(Linux)
+                return receiveBufferPtr
+                #else
                 return getICMPPacketPtr(ipPacketPtr: receiveBufferPtr)
+                #endif
             case .ipv6:
                 return receiveBufferPtr
             }
@@ -496,9 +543,16 @@ extension TimeInterval {
     func toTimeVal() -> timeval {
         let sec = floor(self)
         let usec = floor((self - sec) * 1000000)
+        #if os(Linux)
         return timeval.init(
+            tv_sec: __time_t(sec),
+            tv_usec: __suseconds_t(usec)
+        )
+        #else
+       return timeval.init(
             tv_sec: __darwin_time_t(sec),
             tv_usec: __darwin_suseconds_t(usec)
         )
+        #endif
     }
 }

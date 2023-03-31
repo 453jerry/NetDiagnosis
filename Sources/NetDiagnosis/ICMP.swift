@@ -112,7 +112,7 @@ public enum ICMP {
     }
 }
 
-#if swift(<5.5)
+#if swift(<5.5) || os(Linux)
 //swiftlint:disable identifier_name
 let ICMP_ECHO: Int32 = 8
 let ICMP6_ECHO_REQUEST: Int32 = 128

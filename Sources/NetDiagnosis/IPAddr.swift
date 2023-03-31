@@ -19,7 +19,9 @@ public enum IPAddr {
                 ptr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { pointer in
                     pointer.pointee.sin_family = sa_family_t(AF_INET)
                     pointer.pointee.sin_port = port
+                    #if os(iOS) || os(OSX) ||  os(watchOS) || os(tvOS)
                     pointer.pointee.sin_len = __uint8_t(MemoryLayout<sockaddr_in>.size)
+                    #endif
                     pointer.pointee.sin_addr = addr
                 }
             })
@@ -28,7 +30,9 @@ public enum IPAddr {
                 ptr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { pointer in
                     pointer.pointee.sin6_family = sa_family_t(AF_INET6)
                     pointer.pointee.sin6_port = port
+                    #if os(iOS) || os(OSX) ||  os(watchOS) || os(tvOS)
                     pointer.pointee.sin6_len = __uint8_t(MemoryLayout<sockaddr_in6>.size)
+                    #endif
                     pointer.pointee.sin6_addr = addr
                 }
             })
@@ -244,9 +248,29 @@ extension in_addr: Equatable {
 
 extension in6_addr: Equatable {
     public static func == (lhs: in6_addr, rhs: in6_addr) -> Bool {
+        #if os(Linux)
+        (lhs.__in6_u.__u6_addr32.0 == rhs.__in6_u.__u6_addr32.0) &&
+        (lhs.__in6_u.__u6_addr32.1 == rhs.__in6_u.__u6_addr32.1) &&
+        (lhs.__in6_u.__u6_addr32.2 == rhs.__in6_u.__u6_addr32.2) &&
+        (lhs.__in6_u.__u6_addr32.3 == rhs.__in6_u.__u6_addr32.3)
+        #else
         (lhs.__u6_addr.__u6_addr32.0 == rhs.__u6_addr.__u6_addr32.0) &&
         (lhs.__u6_addr.__u6_addr32.1 == rhs.__u6_addr.__u6_addr32.1) &&
         (lhs.__u6_addr.__u6_addr32.2 == rhs.__u6_addr.__u6_addr32.2) &&
         (lhs.__u6_addr.__u6_addr32.3 == rhs.__u6_addr.__u6_addr32.3)
+        #endif
     }
 }
+
+#if os(Linux)
+extension sockaddr {
+    var sa_len: __uint8_t {
+        if self.sa_family == AF_INET {
+            return __uint8_t(MemoryLayout<sockaddr_in>.size)
+        } else if self.sa_family == AF_INET6 {
+            return __uint8_t(MemoryLayout<sockaddr_in6>.size)
+        }
+        return 0
+    }
+}
+#endif
