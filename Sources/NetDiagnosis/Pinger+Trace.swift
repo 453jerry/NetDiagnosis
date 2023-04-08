@@ -9,13 +9,6 @@ import Foundation
 import OrderedCollections
 
 extension Pinger {
-    public typealias TraceResponseCallback = (
-        _ response: Response,
-        _ hop: UInt8,
-        _ packetIndex: UInt8,
-        _ stopTrace: (_: Bool) -> Void
-    ) -> Void
-    
     public enum TraceStatus {
         case traced
         case maxHopExceeded
@@ -24,24 +17,29 @@ extension Pinger {
     }
     
     public func trace(
-        payload: Data? = nil,
+        packetSize: Int? = nil,
         initHop: UInt8 = 1,
         maxHop: UInt8 = 64,
         packetCount: UInt8 = 3,
         timeOut: TimeInterval = 1.0,
-        onTraceResponse: TraceResponseCallback? = nil,
-        onTraceComplete: @escaping (
-            _ result: OrderedDictionary<UInt8, [Response]>,
+        onTraceResponse: ((
+            _ response: Result,
+            _ hop: UInt8,
+            _ packetIndex: UInt8,
+            _ stopTrace: (_: Bool) -> Void
+        ) -> Void)?,
+        onTraceComplete: ((
+            _ result: OrderedDictionary<UInt8, [Result]>,
             _ status: TraceStatus
-        ) -> Void
+        ) -> Void)?
     ) {
         // swiftlint: disable closure_body_length
         self.serailQueue.async {
-            var traceResult: OrderedDictionary<UInt8, [Response]> = [:]
+            var traceResult: OrderedDictionary<UInt8, [Result]> = [:]
             for hopLimit in initHop ... maxHop {
                 for packetIdx in 0 ..< packetCount {
                     let result = self.ping(
-                        payload: payload,
+                        packetSize: packetSize,
                         hopLimit: hopLimit,
                         timeOut: timeOut
                     )
@@ -53,22 +51,22 @@ extension Pinger {
                     switch result {
                     case .pong:
                         if packetIdx == packetCount - 1 {
-                            onTraceComplete(traceResult, .traced)
+                            onTraceComplete?(traceResult, .traced)
                             return
                         }
                     case .failed(let error):
-                        onTraceComplete(traceResult, .failed(error))
+                        onTraceComplete?(traceResult, .failed(error))
                         return
                     default: 
                         break
                     }
                     if isStop {
-                        onTraceComplete(traceResult, .stoped)
+                        onTraceComplete?(traceResult, .stoped)
                         return
                     }
                 }
             }
-            onTraceComplete(traceResult, .maxHopExceeded)
+            onTraceComplete?(traceResult, .maxHopExceeded)
         }
     }
 }
