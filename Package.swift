@@ -10,6 +10,9 @@ let package = Package(
         .library(
             name: "NetDiagnosis",
             targets: ["NetDiagnosis"]),
+        .library(
+            name: "RxNetDiagnosis",
+            targets: ["RxNetDiagnosis"]),
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
@@ -17,11 +20,21 @@ let package = Package(
         .package(
           url: "https://github.com/apple/swift-collections.git",
           .upToNextMajor(from: "1.0.4") 
+        ),
+        .package(
+          url: "https://github.com/ReactiveX/RxSwift.git",
+          .upToNextMajor(from: "6.5.0")
         )
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
+        .target(
+            name: "RxNetDiagnosis",
+            dependencies: [
+                "NetDiagnosis",
+                "RxSwift",
+            ]),
         .target(
             name: "NetDiagnosis",
             dependencies: [
@@ -31,7 +44,6 @@ let package = Package(
             name: "NetDiagnosisTests",
             dependencies: [
                 "NetDiagnosis",
-                .product(name: "OrderedCollections", package: "swift-collections")
             ]),
     ]
 )

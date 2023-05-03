@@ -19,14 +19,14 @@ public class Pinger {
         var rtt: TimeInterval
     }
     
-    public enum Result {
+    public enum PingResult {
         case pong(_: Response)
         case hopLimitExceeded(_: Response)
         case timeout(sequence: UInt16, identifier: UInt16)
         case failed(_: Error)
     }
     
-    public typealias PingCallback = (_ result: Result) -> Void
+    public typealias PingCallback = (_ result: PingResult) -> Void
 
     public let icmpIdentifier = UInt16.random(in: 1..<UInt16.max)
     var icmpSequence: UInt16 = 0
@@ -73,7 +73,7 @@ public class Pinger {
         packetSize: Int?,
         hopLimit: UInt8?,
         timeOut: TimeInterval
-    ) -> Result {
+    ) -> PingResult {
         // setup
         let currentID = self.icmpIdentifier
         let currentSeq = self.icmpSequence
@@ -129,7 +129,7 @@ public class Pinger {
                     )
                 }),
                 let srcAddr = srcAddr.toIPAddr(),
-                let icmpPacketPtr = recvBuffer.withUnsafeBytes({ ptr in
+                let icmpPacketPtr = recvBuffer.withUnsafeBytes({ ptr -> UnsafeRawBufferPointer? in
                     switch self.remoteAddr.addressFamily {
                     case .ipv4:
                         return getICMPPacketPtr(
@@ -191,7 +191,7 @@ public class Pinger {
         if let hopLimit = hopLimit {
             try self.setHopLimit(UInt32(hopLimit))
         }
-        let packetData = self.createEchoPacket(
+        let packetData = self.createEchoRequestPacket(
             identifier: icmpIdentifier,
             sequence: icmpSeq,
             packetSize: packetSize
@@ -330,7 +330,7 @@ public class Pinger {
         return nil
     }
     
-    public func createEchoPacket(
+    func createEchoRequestPacket(
         identifier: UInt16,
         sequence: UInt16,
         packetSize: Int?

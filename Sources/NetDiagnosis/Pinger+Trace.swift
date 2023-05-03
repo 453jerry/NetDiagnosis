@@ -16,57 +16,66 @@ extension Pinger {
         case failed(_: Error)
     }
     
+    public struct TracePacketResult {
+        var pingResult: PingResult
+        var hop: UInt8
+        var packetIndex: UInt8
+    }
+    
     public func trace(
         packetSize: Int? = nil,
         initHop: UInt8 = 1,
         maxHop: UInt8 = 64,
         packetCount: UInt8 = 3,
         timeOut: TimeInterval = 1.0,
-        onTraceResponse: ((
-            _ response: Result,
-            _ hop: UInt8,
-            _ packetIndex: UInt8,
+        tracePacketCallback: ((
+            _ packetResult: TracePacketResult,
             _ stopTrace: (_: Bool) -> Void
         ) -> Void)?,
         onTraceComplete: ((
-            _ result: OrderedDictionary<UInt8, [Result]>,
+            _ result: OrderedDictionary<UInt8, [PingResult]>,
             _ status: TraceStatus
         ) -> Void)?
     ) {
         // swiftlint: disable closure_body_length
         self.serailQueue.async {
-            var traceResult: OrderedDictionary<UInt8, [Result]> = [:]
+            var traceResults: OrderedDictionary<UInt8, [PingResult]> = [:]
             for hopLimit in initHop ... maxHop {
                 for packetIdx in 0 ..< packetCount {
-                    let result = self.ping(
+                    let pingResult = self.ping(
                         packetSize: packetSize,
                         hopLimit: hopLimit,
                         timeOut: timeOut
                     )
-                    var results = traceResult[hopLimit] ?? []
-                    results.append(result)
-                    traceResult[hopLimit] = results
+                    var hopResults = traceResults[hopLimit] ?? []
+                    hopResults.append(pingResult)
+                    traceResults[hopLimit] = hopResults
                     var isStop = false
-                    onTraceResponse?(result, hopLimit, packetIdx) { isStop = $0 }
-                    switch result {
+                    let packetResult = TracePacketResult.init(
+                        pingResult: pingResult,
+                        hop: hopLimit,
+                        packetIndex: packetIdx
+                    )
+                    tracePacketCallback?(packetResult) { isStop = $0 }
+                    switch pingResult {
                     case .pong:
                         if packetIdx == packetCount - 1 {
-                            onTraceComplete?(traceResult, .traced)
+                            onTraceComplete?(traceResults, .traced)
                             return
                         }
                     case .failed(let error):
-                        onTraceComplete?(traceResult, .failed(error))
+                        onTraceComplete?(traceResults, .failed(error))
                         return
                     default: 
                         break
                     }
                     if isStop {
-                        onTraceComplete?(traceResult, .stoped)
+                        onTraceComplete?(traceResults, .stoped)
                         return
                     }
                 }
             }
-            onTraceComplete?(traceResult, .maxHopExceeded)
+            onTraceComplete?(traceResults, .maxHopExceeded)
         }
     }
 }
