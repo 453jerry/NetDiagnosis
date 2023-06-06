@@ -56,7 +56,7 @@ pinger.ping(hopLimit: 3, timeOut: 0.001) { result in
 // timeout(sequence: 2, identifier: 58577)
 ```
 
-## Trace route
+### Trace route
 
 ```swift
 let remoteAddr = IPAddr.create("13.107.21.200", addressFamily: .ipv4)
@@ -118,4 +118,42 @@ pinger.trace(initHop: 10, maxHop: 14, packetCount: 1) { response, hop, packetInd
 // Hop:13 packetIdx:0, response:hopLimitExceeded(from: 104.44.236.180, hopLimit: 243, sequence: 6, identifier: 62186, time: 0.041616082191467285)
 // Hop:14 packetIdx:0, response:timeout(sequence: 7, identifier: 62186)
 // Complete Status:maxHopExceeded
+```
+
+## RxSwfit Support
+
+### Ping
+
+```swift
+pinger.rx.ping().subscribe { r in
+    print(r)
+}
+.disposed(by: disposeBag)
+// Output:
+// success(NetDiagnosis.Pinger.PingResult.pong(NetDiagnosis.Pinger.Response(len: 64, from: 110.242.68.66, hopLimit: 51, sequence: 0, identifier: 47189, rtt: 0.03671896457672119)))
+```
+
+
+### Trace route
+
+```swift
+pinger.rx.trace().subscribe { r in
+    print(r)
+}
+.disposed(by: disposeBag)
+
+// Output:
+// next(TracePacketResult(pingResult: NetDiagnosis.Pinger.PingResult.timeout(sequence: 0, identifier: 38724), hop: 1, packetIndex: 0))
+// next(TracePacketResult(pingResult: NetDiagnosis.Pinger.PingResult.timeout(sequence: 1, identifier: 38724), hop: 1, packetIndex: 1))
+// next(TracePacketResult(pingResult: NetDiagnosis.Pinger.PingResult.timeout(sequence: 2, identifier: 38724), hop: 1, packetIndex: 2))
+
+//...
+
+//next(TracePacketResult(pingResult: NetDiagnosis.Pinger.PingResult.pong(NetDiagnosis.Pinger.Response(len: 64, from: 110.242.68.66, hopLimit: 51, sequence: 48, identifier: 38724, rtt: 0.03915095329284668)), hop: 17, packetIndex: 0))
+// next(TracePacketResult(pingResult: NetDiagnosis.Pinger.PingResult.pong(NetDiagnosis.Pinger.Response(len: 64, from: 110.242.68.66, hopLimit: 51, sequence: 49, identifier: 38724, rtt: 0.03501296043395996)), hop: 17, packetIndex: 1))
+// next(TracePacketResult(pingResult: NetDiagnosis.Pinger.PingResult.pong(NetDiagnosis.Pinger.Response(len: 64, from: 110.242.68.66, hopLimit: 51, sequence: 50, identifier: 38724, rtt: 0.03649783134460449)), hop: 17, packetIndex: 2))
+// completed
+
+
+
 ```
