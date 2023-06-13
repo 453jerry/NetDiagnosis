@@ -36,17 +36,20 @@ public enum IPAddr {
         return addrStorage
     }
     
-    public static func create(_ addrss: String, addressFamily: AddressFamily) -> IPAddr {
+    public static func create(_ addrss: String, addressFamily: AddressFamily) -> IPAddr? {
         switch addressFamily {
         case .ipv4:
             var addr = in_addr()
-            assert(inet_pton(AF_INET, addrss, &addr) == 1)
+            if inet_pton(AF_INET, addrss, &addr) == 1 {
             return .ipv4(addr)
+            }
         case .ipv6:
             var addr = in6_addr()
-            assert(inet_pton(AF_INET6, addrss, &addr) == 1)
+            if inet_pton(AF_INET6, addrss, &addr) == 1 {
             return .ipv6(addr)
+            }
         }
+        return nil
     }
     
     public enum AddressFamily {
