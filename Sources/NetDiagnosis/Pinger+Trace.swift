@@ -17,9 +17,9 @@ extension Pinger {
     }
     
     public struct TracePacketResult {
-        var pingResult: PingResult
-        var hop: UInt8
-        var packetIndex: UInt8
+        public var pingResult: PingResult
+        public var hop: UInt8
+        public var packetIndex: UInt8
     }
     
     public func trace(

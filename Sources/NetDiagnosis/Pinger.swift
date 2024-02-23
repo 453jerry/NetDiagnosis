@@ -11,12 +11,12 @@ import Foundation
 // swiftlint: disable type_body_length force_unwrapping function_body_length
 public class Pinger {
     public struct Response {
-        var len: Int
-        var from: IPAddr
-        var hopLimit: UInt8
-        var sequence: UInt16
-        var identifier: UInt16
-        var rtt: TimeInterval
+        public var len: Int
+        public var from: IPAddr
+        public var hopLimit: UInt8
+        public var sequence: UInt16
+        public var identifier: UInt16
+        public var rtt: TimeInterval
     }
     
     public enum PingResult {
