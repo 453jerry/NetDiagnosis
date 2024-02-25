@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "NetDiagnosis",
-    platforms: [.iOS(.v9), .macOS(.v10_10), .watchOS(.v3), .tvOS(.v9)], //As RxSwfit Requiredb
+    platforms: [.iOS(.v9), .macOS(.v10_10), .watchOS(.v5), .tvOS(.v9)], //As RxSwfit Requiredb
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
