@@ -129,7 +129,7 @@ public class Pinger {
                     )
                 }),
                 let srcAddr = srcAddr.toIPAddr(),
-                let icmpPacketPtr = recvBuffer.withUnsafeBytes({ ptr -> UnsafeRawBufferPointer? in
+                let icmpPacketPtr = recvBuffer.withUnsafeBytes({ ptr in
                     switch self.remoteAddr.addressFamily {
                     case .ipv4:
                         return getICMPPacketPtr(
@@ -197,7 +197,7 @@ public class Pinger {
             packetSize: packetSize
         )
         
-        let sentCount = packetData.withUnsafeBytes { packetPtr -> ssize_t in
+        let sentCount = packetData.withUnsafeBytes { packetPtr in
             let addrStorage = self.remoteAddr.createSockStorage()
             return withUnsafePointer(to: addrStorage) { addrPtr in
                 addrPtr.withMemoryRebound(
@@ -291,7 +291,7 @@ public class Pinger {
     }
     
     func getICMPPacketPtr(ipPacketPtr: UnsafeRawBufferPointer) -> UnsafeRawBufferPointer? {
-        guard let ipVer = { () -> IPAddr.AddressFamily? in
+        guard let ipVer = {
             let ver: UInt8 = (ipPacketPtr[0] & 0xF0) >> 4
             if ver == 0x04 {
                 return IPAddr.AddressFamily.ipv4
