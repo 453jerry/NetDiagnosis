@@ -56,7 +56,11 @@ public class Pinger {
         }
         try self.setReceiveHopLimit(true)
     }
-    
+
+    deinit {
+        close(sock)
+    }
+
     public func ping(
         packetSize: Int? = nil,
         hopLimit: UInt8? = nil,
